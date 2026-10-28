@@ -1,85 +1,86 @@
 # NMS-Benchmark
 
-**Ускорение классического Non-Maximum Suppression с помощью пространственного хеширования**
+**English** | [Русский](README.ru.md)
+
+**Speeding up classic Non-Maximum Suppression with spatial hashing**
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-Код и результаты выпускной квалификационной работы, посвященной алгоритмам подавления немаксимумов
-(Non-Maximum Suppression, NMS) — этапу постобработки, на котором детектор объектов избавляется
-от дублирующих рамок. В работе реализованы и сравнены пять известных методов NMS, а также предложена
-модификация **Hashing-based NMS**, которая:
+Code and results of a graduation thesis on Non-Maximum Suppression (NMS), the post-processing step
+in which an object detector removes duplicate bounding boxes. The thesis implements and compares five
+well-known NMS methods and proposes a modification of **Hashing-based NMS** that:
 
-- дает **ровно тот же результат, что и классический NMS** — это доказано и проверено: 0 расхождений
-  на 20 316 рамках двух тестовых наборов и на 3 000 случайных тестах;
-- работает в **3.6 раза быстрее** классического NMS на синтетическом наборе из 10 000 изображений
-  и в **80 раз быстрее** при ~5 000 рамках на изображение;
-- растет по времени **практически линейно** с числом рамок при постоянной плотности сцены.
+- produces **exactly the same output as classic NMS**, which is proven and verified: 0 mismatches
+  on 20,316 boxes from two test sets and on 3,000 random tests;
+- is **3.6× faster** than classic NMS on a synthetic set of 10,000 images
+  and **80× faster** at ~5,000 boxes per image;
+- scales **almost linearly** with the number of boxes when scene density is constant.
 
 ---
 
-## Содержание
+## Contents
 
-- [Идея](#идея)
-- [Результаты](#результаты)
-- [Структура репозитория](#структура-репозитория)
-- [Установка](#установка)
-- [Использование](#использование)
-- [Воспроизведение экспериментов](#воспроизведение-экспериментов)
-- [Ограничения](#ограничения)
-- [Литература](#литература)
+- [Idea](#idea)
+- [Results](#results)
+- [Repository structure](#repository-structure)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Reproducing the experiments](#reproducing-the-experiments)
+- [Limitations](#limitations)
+- [References](#references)
 
-## Идея
+## Idea
 
-Классический (жадный) NMS сортирует рамки по уверенности и сравнивает каждую с уже сохраненными —
-это O(N²). Hashing-based NMS [Wang et al., 2020] избавляется от попарных сравнений: рамки хешируются
-в сетку, и в каждой ячейке остается рамка с наибольшей уверенностью. Это линейно, но решение
-о подавлении принимается **по совпадению хеш-кода, а не по перекрытию**: два почти одинаковых
-дубликата по разные стороны границы ячейки выживают оба. На CrowdHuman точность падает
-с 0.892 до 0.526.
+Classic (greedy) NMS sorts boxes by confidence and compares each box with the boxes already kept,
+which is O(N²). Hashing-based NMS [Wang et al., 2020] avoids pairwise comparisons: boxes are hashed
+into a grid, and each cell keeps only the box with the highest confidence. This is linear, but the
+suppression decision is made **by hash-code collision, not by actual overlap**: two near-identical
+duplicates on opposite sides of a cell boundary both survive. On CrowdHuman, precision drops
+from 0.892 to 0.526.
 
-Предлагаемая модификация использует хеш-таблицу **не как критерий подавления, а как пространственный
-индекс**:
+The proposed modification uses the hash table **as a spatial index rather than as a suppression
+criterion**:
 
-1. Рамка попадает в ячейку квадратной сетки по координатам центра. Размер ячейки α — половина медианного
-   размера рамки на изображении (влияет только на скорость, но не на результат).
-2. Рамки обрабатываются по убыванию уверенности, как в классическом NMS.
-3. Кандидат сравнивается по IoU только с уже сохраненными рамками из окрестности
-   `|i − u| ≤ rx, |j − v| ≤ ry`, где радиус зависит от размера кандидата:
+1. Each box is placed into a cell of a square grid by its center. The cell size α is half the median
+   box size in the image (it affects only speed, not the result).
+2. Boxes are processed in descending order of confidence, as in classic NMS.
+3. A candidate is compared by IoU only with the already kept boxes in the neighborhood
+   `|i − u| ≤ rx, |j − v| ≤ ry`, whose radius depends on the candidate's size:
 
    $$r_x = \max\left(1, \left\lceil \frac{k(T)\cdot w}{\alpha} \right\rceil\right),\quad
      r_y = \max\left(1, \left\lceil \frac{k(T)\cdot h}{\alpha} \right\rceil\right),\quad
      k(T) = \max\left(1 - T, \frac{1 - T}{2T}\right)$$
 
-4. Кандидат сохраняется, если его IoU со всеми рамками окрестности меньше порога T.
+4. The candidate is kept if its IoU with every box in the neighborhood is below the threshold T.
 
-**Утверждение.** Если IoU(b₁, b₂) ≥ T, то центры рамок сдвинуты по горизонтали не более чем на k(T)·w₁,
-а по вертикали — не более чем на k(T)·h₁ (при T ≥ 0.5 это (1 − T)·w₁ и (1 − T)·h₁).
-Следовательно, все рамки, способные подавить кандидата, лежат в его окрестности, и решение о подавлении
-совпадает с классическим NMS. Доказательство приведено в работе (раздел «Математическая формализация
-алгоритма»).
+**Claim.** If IoU(b₁, b₂) ≥ T, the horizontal distance between the box centers is at most k(T)·w₁
+and the vertical distance is at most k(T)·h₁ (for T ≥ 0.5 these are (1 − T)·w₁ and (1 − T)·h₁).
+Hence every box that could suppress the candidate lies in its neighborhood, and the suppression
+decision is identical to classic NMS. The proof is given in the thesis (section "Mathematical
+formalization of the algorithm").
 
-Сложность — **O(N log N + N·m)**, где m — среднее число сохраненных рамок в окрестности. При ограниченной
-плотности сцены m не зависит от N; в худшем случае (все рамки в одной окрестности) алгоритм вырождается
-в классический NMS.
+The complexity is **O(N log N + N·m)**, where m is the average number of kept boxes in a neighborhood.
+For bounded scene density, m does not depend on N; in the worst case (all boxes in one neighborhood)
+the algorithm degenerates into classic NMS.
 
-Реализация — [`ModifiedNMS.py`](ModifiedNMS.py), около 40 строк на чистом Python.
+Implementation: [`ModifiedNMS.py`](ModifiedNMS.py), about 40 lines of pure Python.
 
-## Результаты
+## Results
 
-Все алгоритмы реализованы на Python без векторизации и сравниваются в одинаковых условиях
-(Intel Core i7-12700, порог IoU = 0.5).
+All algorithms are implemented in Python without vectorization and compared under identical
+conditions (Intel Core i7-12700, IoU threshold = 0.5).
 
-### Скорость на синтетических данных
+### Speed on synthetic data
 
-10 000 изображений, от 5 до 50 объектов, вокруг каждого 3–10 рамок-дубликатов (в среднем 179 рамок
-на изображение).
+10,000 images with 5 to 50 objects each and 3–10 duplicate boxes around every object
+(179 boxes per image on average).
 
-| Алгоритм | Сложность | Время, с |
+| Algorithm | Complexity | Time, s |
 |---|---|---:|
 | Hashing-based NMS | O(N) | 2.09 |
-| **Модифицированный Hashing-based NMS** | O(N log N + N·m) | **5.96** |
-| HNMS + NMS (каскад) | O(N + N′²) | 15.67 |
+| **Modified Hashing-based NMS** | O(N log N + N·m) | **5.96** |
+| HNMS + NMS (cascade) | O(N + N′²) | 15.67 |
 | Classic NMS | O(N²) | 21.55 |
 | Inverted NMS | O(N²) | 34.49 |
 | Adaptive NMS | O(N²) | 78.73 |
@@ -87,23 +88,24 @@
 
 <table>
   <tr>
-    <td><img src="results/nms_time_scaling.png" alt="Время от числа рамок при постоянной плотности"></td>
-    <td><img src="results/nms_time_density.png" alt="Время от числа рамок при растущей плотности"></td>
+    <td><img src="results/nms_time_scaling.png" alt="Time vs. number of boxes, constant density"></td>
+    <td><img src="results/nms_time_density.png" alt="Time vs. number of boxes, growing density"></td>
   </tr>
   <tr>
-    <td align="center">Постоянная плотность сцены: при N ≈ 5107 модификация быстрее Classic NMS в 80 раз</td>
-    <td align="center">Растущая плотность (кадр 1500×1500): при N ≈ 5186 — в 45 раз</td>
+    <td align="center">Constant scene density: at N ≈ 5107 the modification is 80× faster than Classic NMS</td>
+    <td align="center">Growing density (1500×1500 frame): 45× faster at N ≈ 5186</td>
   </tr>
 </table>
 
-### Качество на реальных данных
+### Quality on real data
 
-Встроенный NMS детектора YOLOv8n отключен, на вход алгоритмов поступают все рамки с уверенностью ≥ 0.05.
-Precision, Recall и F1 — при пороге уверенности 0.25, AP50 — по всей PR-кривой, время — на одно изображение.
+The built-in NMS of the YOLOv8n detector is disabled, so the algorithms receive every box with
+confidence ≥ 0.05. Precision, Recall and F1 are reported at a confidence threshold of 0.25, AP50
+over the full PR curve, and time per image.
 
-**CrowdHuman** — 929 изображений, 25 816 людей, YOLOv8n (COCO), в среднем 155 рамок на изображение:
+**CrowdHuman**: 929 images, 25,816 people, YOLOv8n (COCO), 155 boxes per image on average.
 
-| Алгоритм | Precision | Recall | F1 | AP50 | Время, мс |
+| Algorithm | Precision | Recall | F1 | AP50 | Time, ms |
 |---|---:|---:|---:|---:|---:|
 | Classic NMS | 0.892 | 0.305 | 0.454 | 0.420 | 0.94 |
 | Soft NMS | 0.903 | 0.298 | 0.448 | 0.428 | 8.49 |
@@ -111,12 +113,12 @@ Precision, Recall и F1 — при пороге уверенности 0.25, AP5
 | Inverted NMS | 0.895 | 0.303 | 0.452 | 0.408 | 2.14 |
 | Hashing-based NMS | 0.526 | 0.323 | 0.400 | 0.311 | 0.17 |
 | HNMS + NMS | 0.893 | 0.304 | 0.454 | 0.419 | 0.61 |
-| **Модифицированный Hashing-based NMS** | **0.892** | **0.305** | **0.454** | **0.420** | **0.74** |
+| **Modified Hashing-based NMS** | **0.892** | **0.305** | **0.454** | **0.420** | **0.74** |
 
-**Blood Cell** — 87 изображений, 1 140 клеток трех классов, YOLOv8n, дообученная на этом наборе,
-в среднем 258 рамок на изображение:
+**Blood Cell**: 87 images, 1,140 cells of three classes, YOLOv8n fine-tuned on this dataset,
+258 boxes per image on average.
 
-| Алгоритм | Precision | Recall | F1 | AP50 | Время, мс |
+| Algorithm | Precision | Recall | F1 | AP50 | Time, ms |
 |---|---:|---:|---:|---:|---:|
 | Classic NMS | 0.632 | 0.932 | 0.753 | 0.875 | 2.35 |
 | Soft NMS | 0.640 | 0.927 | 0.757 | 0.873 | 14.86 |
@@ -124,12 +126,12 @@ Precision, Recall и F1 — при пороге уверенности 0.25, AP5
 | Inverted NMS | 0.632 | 0.931 | 0.753 | 0.872 | 3.71 |
 | Hashing-based NMS | 0.453 | 0.934 | 0.610 | 0.768 | 0.45 |
 | HNMS + NMS | 0.632 | 0.932 | 0.753 | 0.875 | 1.02 |
-| **Модифицированный Hashing-based NMS** | **0.632** | **0.932** | **0.753** | **0.875** | **0.83** |
+| **Modified Hashing-based NMS** | **0.632** | **0.932** | **0.753** | **0.875** | **0.83** |
 
 <table>
   <tr>
-    <td><img src="results/CrowdHuman_precision_recall_curve_hashing.png" alt="PR-кривые, CrowdHuman"></td>
-    <td><img src="results/BloodCell_precision_recall_curve_hashing.png" alt="PR-кривые, Blood Cell"></td>
+    <td><img src="results/CrowdHuman_precision_recall_curve_hashing.png" alt="PR curves, CrowdHuman"></td>
+    <td><img src="results/BloodCell_precision_recall_curve_hashing.png" alt="PR curves, Blood Cell"></td>
   </tr>
   <tr>
     <td align="center">CrowdHuman</td>
@@ -137,56 +139,57 @@ Precision, Recall и F1 — при пороге уверенности 0.25, AP5
   </tr>
 </table>
 
-### Совпадение с классическим NMS на уровне рамок
+### Box-level agreement with classic NMS
 
-| Набор | Сравнение | Рамок у Classic NMS | Расхождений |
+| Dataset | Compared algorithm | Boxes kept by Classic NMS | Mismatches |
 |---|---|---:|---:|
-| CrowdHuman | Модифицированный Hashing-based NMS | 18 045 | **0** |
-| CrowdHuman | HNMS + NMS | 18 045 | 346 |
-| Blood Cell | Модифицированный Hashing-based NMS | 2 271 | **0** |
-| Blood Cell | HNMS + NMS | 2 271 | 13 |
-| Случайные тесты (3 000 шт., T от 0.2 до 0.8, разные α) | Модифицированный Hashing-based NMS | — | **0** |
+| CrowdHuman | Modified Hashing-based NMS | 18,045 | **0** |
+| CrowdHuman | HNMS + NMS | 18,045 | 346 |
+| Blood Cell | Modified Hashing-based NMS | 2,271 | **0** |
+| Blood Cell | HNMS + NMS | 2,271 | 13 |
+| Random tests (3,000, T from 0.2 to 0.8, various α) | Modified Hashing-based NMS | — | **0** |
 
-### Другие выводы
+### Other findings
 
-- **Classic, Soft, Adaptive и Inverted NMS практически равноценны** по качеству: F1 различается
-  не более чем на 0.007, а 95%-е бутстрэп-интервалы разности с Classic NMS малы и меняют знак
-  от набора к набору. Soft NMS выделяется более высоким AP50 на CrowdHuman, но он самый медленный.
-- **Adaptive NMS без ветви предсказания плотности** сводится к классическому NMS с порогом 0.7 —
-  метрики совпадают до третьего знака на обоих наборах.
-- **Hashing-based NMS** чувствителен к α и числу хеш-функций K: лучший вариант (α = 0.5, K = 4) почти
-  догоняет Classic NMS по F1 (0.453), но уступает по точности, а время растет пропорционально K.
-- **Размер ячейки** модифицированного алгоритма в диапазоне 0.25–4 медианных размера рамки не меняет
-  результат, а время минимально при половине медианного размера — это значение по умолчанию.
+- **Classic, Soft, Adaptive and Inverted NMS are practically equivalent** in quality: F1 differs
+  by at most 0.007, and the 95% bootstrap intervals of the difference from Classic NMS are small
+  and change sign between datasets. Soft NMS stands out with a higher AP50 on CrowdHuman but is the slowest.
+- **Adaptive NMS without a density prediction branch** reduces to classic NMS with a threshold of 0.7:
+  the metrics match to three decimal places on both datasets.
+- **Hashing-based NMS** is sensitive to α and the number of hash functions K: the best setting
+  (α = 0.5, K = 4) almost matches Classic NMS in F1 (0.453) but has lower precision, and its time
+  grows proportionally to K.
+- **Cell size** of the modified algorithm in the range of 0.25–4 median box sizes does not change
+  the result; time is minimal at half the median size, which is the default.
 
-Все таблицы лежат в [`results/`](results) в виде CSV.
+All tables are available as CSV files in [`results/`](results).
 
-### Когда что использовать
+### Which method to use
 
-| Ситуация | Рекомендация |
+| Situation | Recommendation |
 |---|---|
-| Допустима потеря точности, важна только скорость | Hashing-based NMS |
-| Немного рамок, нужно качество около Classic NMS | HNMS + NMS |
-| Нужно точное совпадение с Classic NMS или рамок много (плотные сцены, низкий порог уверенности, высокое разрешение) | **Модифицированный Hashing-based NMS** |
-| Важен AP, время некритично | Soft NMS |
+| Some loss of precision is acceptable, only speed matters | Hashing-based NMS |
+| Few boxes, quality close to Classic NMS is needed | HNMS + NMS |
+| Exact agreement with Classic NMS is required, or there are many boxes (dense scenes, low confidence threshold, high resolution) | **Modified Hashing-based NMS** |
+| AP matters, time is not critical | Soft NMS |
 
-## Структура репозитория
+## Repository structure
 
 ```
 .
 ├── NMS.py              # Classic, Soft, Adaptive, Hashing-based, HNMS + NMS, Inverted NMS
-├── ModifiedNMS.py      # предлагаемый алгоритм: modified_hashing_nms
-├── SPEEDBenchmark.py   # скорость на синтетических данных и масштабирование по N
-├── Evaluate.py         # Precision / Recall / F1 / AP50 и PR-кривые на CrowdHuman и Blood Cell
-├── Ablation.py         # бутстрэп-интервалы, чувствительность HNMS, размер ячейки, проверка совпадения
-├── tests/              # pytest: совпадение modified_hashing_nms с classic_nms и базовые проверки
-├── predictions/        # сырые предсказания YOLOv8n на тестовых выборках (кеш, датасеты не нужны)
-├── weights/            # YOLOv8n, дообученная на Blood Cell
-├── results/            # CSV и графики, приведенные в работе
-└── data/               # сюда кладутся датасеты (см. data/README.md)
+├── ModifiedNMS.py      # proposed algorithm: modified_hashing_nms
+├── SPEEDBenchmark.py   # speed on synthetic data and scaling with N
+├── Evaluate.py         # Precision / Recall / F1 / AP50 and PR curves on CrowdHuman and Blood Cell
+├── Ablation.py         # bootstrap intervals, HNMS sensitivity, cell size, agreement checks
+├── tests/              # pytest: modified_hashing_nms vs. classic_nms and basic checks
+├── predictions/        # raw YOLOv8n predictions on the test sets (cache, no datasets needed)
+├── weights/            # YOLOv8n fine-tuned on Blood Cell
+├── results/            # CSV files and plots used in the thesis
+└── data/               # place the datasets here (see data/README.md)
 ```
 
-## Установка
+## Installation
 
 ```bash
 git clone https://github.com/flantick/NMS-Benchmark.git
@@ -196,13 +199,13 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Сами алгоритмы (`NMS.py`, `ModifiedNMS.py`) используют только стандартную библиотеку Python.
-`ultralytics` нужен лишь для того, чтобы заново получить предсказания детектора.
+The algorithms themselves (`NMS.py`, `ModifiedNMS.py`) use only the Python standard library.
+`ultralytics` is needed only to regenerate the detector predictions.
 
-## Использование
+## Usage
 
-Все алгоритмы принимают список рамок `(x1, y1, x2, y2, score)` и порог IoU и возвращают отфильтрованный
-список:
+Every algorithm takes a list of boxes `(x1, y1, x2, y2, score)` and an IoU threshold and returns
+the filtered list:
 
 ```python
 from NMS import classic_nms
@@ -210,7 +213,7 @@ from ModifiedNMS import modified_hashing_nms
 
 detections = [
     (10, 10, 110, 110, 0.95),
-    (12, 14, 108, 112, 0.80),   # дубликат первой рамки
+    (12, 14, 108, 112, 0.80),   # duplicate of the first box
     (300, 40, 380, 160, 0.70),
 ]
 
@@ -219,46 +222,47 @@ assert kept == classic_nms(detections, 0.5)
 print(kept)  # [(10, 10, 110, 110, 0.95), (300, 40, 380, 160, 0.7)]
 ```
 
-Параметр `alpha` задает размер ячейки сетки; по умолчанию это половина медианного размера рамки.
+The `alpha` parameter sets the grid cell size; by default it is half the median box size.
 
-## Воспроизведение экспериментов
+## Reproducing the experiments
 
-Скрипты запускаются из корня репозитория и пишут результаты в `results/`.
+Run the scripts from the repository root; they write their output to `results/`.
 
 ```bash
-# Скорость на синтетических данных (таблица 1, рисунки 6, 9, 10). Долго: Soft NMS на больших N.
+# Speed on synthetic data (Table 1, Figures 6, 9, 10). Slow: Soft NMS at large N.
 python SPEEDBenchmark.py
 
-# Метрики качества и PR-кривые (таблицы 2, 3, 5, 6, рисунки 7, 8, 11, 12).
-# Работает по кешу из predictions/, датасеты не нужны.
-python Evaluate.py                 # оба набора
-python Evaluate.py CrowdHuman      # или один
+# Quality metrics and PR curves (Tables 2, 3, 5, 6, Figures 7, 8, 11, 12).
+# Uses the cache in predictions/, no datasets needed.
+python Evaluate.py                 # both datasets
+python Evaluate.py CrowdHuman      # or just one
 
-# Дополнительные эксперименты: бутстрэп, чувствительность, размер ячейки, проверка совпадения
+# Additional experiments: bootstrap, sensitivity, cell size, agreement checks
 python Ablation.py
 
-# Тесты
+# Tests
 pytest
 ```
 
-Чтобы получить предсказания детектора заново, скачайте датасеты по инструкции из
-[`data/README.md`](data/README.md), удалите нужный файл из `predictions/` и запустите `Evaluate.py`.
-Для CrowdHuman используется предобученная `yolov8n.pt` (ultralytics скачает ее автоматически),
-для Blood Cell — `weights/bloodcell_yolov8n.pt`.
+To regenerate the detector predictions, download the datasets as described in
+[`data/README.md`](data/README.md), delete the corresponding file from `predictions/` and run `Evaluate.py`.
+CrowdHuman uses the pretrained `yolov8n.pt` (ultralytics downloads it automatically),
+Blood Cell uses `weights/bloodcell_yolov8n.pt`.
 
-Абсолютные значения времени зависят от процессора; метрики качества воспроизводятся точно.
+Absolute timings depend on the CPU; quality metrics are reproduced exactly.
 
-## Ограничения
+## Limitations
 
-- Все алгоритмы реализованы на чистом Python. Оптимизированные реализации (например,
-  `torchvision.ops.nms` на C++/CUDA) работают значительно быстрее, поэтому абсолютные значения времени
-  на них не переносятся. Вывод об асимптотике при этом сохраняется.
-- При 150–250 рамках на изображение NMS занимает доли миллисекунды, тогда как сам YOLOv8n на RTX 5060 Ti —
-  около 6 мс, поэтому выигрыш становится заметен при тысячах кандидатов на изображение.
-- Невысокая полнота на CrowdHuman (около 0.30) объясняется детектором: YOLOv8n обучена на COCO
-  и не дообучалась на CrowdHuman. Детектор один для всех алгоритмов, поэтому на их сравнение это не влияет.
+- All algorithms are implemented in pure Python. Optimized implementations (e.g. `torchvision.ops.nms`
+  in C++/CUDA) are much faster, so the absolute timings do not carry over to them. The conclusion about
+  asymptotic behavior still holds.
+- At 150–250 boxes per image NMS takes a fraction of a millisecond, while YOLOv8n itself takes about
+  6 ms on an RTX 5060 Ti, so the speed-up becomes noticeable with thousands of candidates per image.
+- The low recall on CrowdHuman (about 0.30) is due to the detector: YOLOv8n is trained on COCO
+  and was not fine-tuned on CrowdHuman. The same detector is used for every algorithm, so this does
+  not affect the comparison.
 
-## Литература
+## References
 
 1. Wang J., Yin X., Wang L., Zhang L. [Hashing-based Non-Maximum Suppression for Crowded Object Detection](https://arxiv.org/abs/2005.11426). arXiv, 2020.
 2. Bodla N., Singh B., Chellappa R., Davis L. S. Soft-NMS — Improving Object Detection with One Line of Code. ICCV, 2017.
@@ -268,9 +272,9 @@ pytest
 6. Teschner M. et al. Optimized Spatial Hashing for Collision Detection of Deformable Objects. VMV, 2003.
 7. Jocher G., Chaurasia A., Qiu J. [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics), 2023.
 
-Полный список — в тексте работы.
+The full list is in the thesis.
 
-## Лицензия
+## License
 
-Код распространяется по лицензии [MIT](LICENSE). Датасеты CrowdHuman и Blood Cell (Roboflow) распространяются
-по лицензии CC BY 4.0 и в репозиторий не входят.
+The code is released under the [MIT](LICENSE) license. The CrowdHuman and Blood Cell datasets (Roboflow)
+are distributed under CC BY 4.0 and are not included in this repository.
