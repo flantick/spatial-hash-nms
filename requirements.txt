@@ -1,0 +1,9 @@
+numpy
+pandas
+matplotlib
+pytest
+
+# Нужны только для повторного получения предсказаний детектора (Evaluate.py без кеша в predictions/).
+# Для GPU установите сборку torch под свою версию CUDA: https://pytorch.org/get-started/locally/
+ultralytics
+pillow

@@ -1,0 +1,7 @@
+Dataset,Algorithm,Precision,Recall,F1-Score,AP50,"Time, ms/img"
+CrowdHuman,Adaptive NMS,0.849,0.31,0.454,0.417,2.469
+CrowdHuman,"Classic NMS, T = 0.5",0.892,0.305,0.454,0.42,1.13
+CrowdHuman,"Classic NMS, T = 0.7",0.849,0.31,0.454,0.417,1.28
+BloodCell,Adaptive NMS,0.628,0.932,0.75,0.875,5.275
+BloodCell,"Classic NMS, T = 0.5",0.632,0.932,0.753,0.875,2.898
+BloodCell,"Classic NMS, T = 0.7",0.628,0.932,0.75,0.875,1.964

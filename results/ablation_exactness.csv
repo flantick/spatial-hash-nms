@@ -1,0 +1,7 @@
+Dataset,Algorithm,Reference boxes,Different boxes
+CrowdHuman,Modified Hashing-based NMS,18045,0
+CrowdHuman,HNMS + NMS,18045,346
+CrowdHuman,"Adaptive NMS vs Classic NMS, T = 0.7",24549,730
+BloodCell,Modified Hashing-based NMS,2271,0
+BloodCell,HNMS + NMS,2271,13
+BloodCell,"Adaptive NMS vs Classic NMS, T = 0.7",2441,8

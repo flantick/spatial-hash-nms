@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.idea/
+.vscode/
+.ipynb_checkpoints/
+
+# Датасеты скачиваются отдельно (см. data/README.md)
+data/*
+!data/README.md
+
+# Веса и артефакты ultralytics
+/yolov8n.pt
+runs/
