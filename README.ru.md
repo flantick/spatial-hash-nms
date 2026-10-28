@@ -1,4 +1,4 @@
-# NMS-Benchmark
+# spatial-hash-nms
 
 [English](README.md) | **Русский**
 
@@ -191,8 +191,8 @@ Precision, Recall и F1 — при пороге уверенности 0.25, AP5
 ## Установка
 
 ```bash
-git clone https://github.com/flantick/NMS-Benchmark.git
-cd NMS-Benchmark
+git clone https://github.com/flantick/spatial-hash-nms.git
+cd spatial-hash-nms
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt

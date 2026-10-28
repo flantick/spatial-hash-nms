@@ -1,4 +1,4 @@
-# NMS-Benchmark
+# spatial-hash-nms
 
 **English** | [Русский](README.ru.md)
 
@@ -192,8 +192,8 @@ All tables are available as CSV files in [`results/`](results).
 ## Installation
 
 ```bash
-git clone https://github.com/flantick/NMS-Benchmark.git
-cd NMS-Benchmark
+git clone https://github.com/flantick/spatial-hash-nms.git
+cd spatial-hash-nms
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
